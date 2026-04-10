@@ -3,6 +3,7 @@
 ## Grundlagen
 
 ### Einführung in Nebenläufigkeit
+
 - Definition: Was ist Nebenläufigkeit? Unterschied zu Parallelität.
 
      **Nebenläufigkeit** bezieht sich auf die Fähigkeit eines Systems, mehrere Aufgaben ***gleichzeitig*** zu bearbeiten, während **Parallelität** die gleichzeitige Ausführung von Aufgaben auf mehreren Prozessoren oder Kernen bedeutet.
@@ -60,6 +61,7 @@
 ### The Basics of Java Concurrency
 
 #### Life Cycle of a Thread
+
 - In der Programmiersprache Java wird Multithreading durch das Kernkonzept eines Threads gesteuert.
   Threads durchlaufen während ihres Lebenszyklus verschiedene Zustände.
 
@@ -75,6 +77,7 @@ Runnable runnable = new NewState();
 Thread t = new Thread(runnable);
 System.out.println(t.getState()); 
 ```
+
 Da wir den erwähnten Thread noch nicht gestartet haben, gibt die Methode `t.getState()` Folgendes aus:
 `NEU`
 
@@ -90,6 +93,7 @@ Thread t = new Thread(runnable);
 t.start();
 System.out.println(t.getState());
 ```
+
 Dieser Code gibt höchstwahrscheinlich die Ausgabe `RUNNABLE` zurück.
 Es kann sein, dass es vom Thread-Scheduler sofort eingeplant wurde und die Ausführung bereits abgeschlossen ist. 
 In solchen Fällen erhalten wir möglicherweise eine andere Ausgabe.
@@ -97,6 +101,7 @@ In solchen Fällen erhalten wir möglicherweise eine andere Ausgabe.
   **BLOCKED** – wartet auf den Erhalt einer Monitorsperre, um einen synchronisierten Block/eine Methode zu betreten oder erneut zu betreten;
   Die Methode `commonResource()` ist **synchronisiert**, d. h., nur ein Thread kann darauf zugreifen. 
   Alle nachfolgenden Threads, die versuchen, auf diese Methode zuzugreifen, werden blockiert, bis der aktuelle Thread die Verarbeitung abgeschlossen hat.
+
 ```java
 public class BlockedState {
    public static void main(String[] args) throws
@@ -119,6 +124,7 @@ while(true) {
 }
 }
 ```
+
 Wenn t1 diese Methode aufruft, befindet es sich in einer Endlosschleife; dies dient lediglich dazu,
 eine rechenintensive Verarbeitung zu simulieren, damit keine anderen Threads diese Methode aufrufen können.
 Wenn wir nun t2 starten, versucht es, die Methode `commonResource()` aufzurufen,
@@ -129,7 +135,9 @@ Wenn wir in diesem Zustand `t2.getState()` aufrufen, erhalten wir die Ausgabe:
   **WAITING** – wartet darauf, dass ein anderer Thread eine bestimmte Aktion ausführt (ohne Zeitlimit), z. B. durch Aufrufen von `wait()`, `join()` oder `park()`. Beachten Sie, dass wir in wait() und join() keine Timeout-Periode definieren.;
   **TIMED_WAITING** – wartet darauf, dass ein anderer Thread eine bestimmte Aktion für einen festgelegten Zeitraum ausführt, z. B. durch Aufrufen von `sleep()`, `wait()` mit einem Timeout oder `join()` mit einem Timeout.;
   **TERMINATED** – hat seine Ausführung beendet oder wurde abnormal beendet.
+
 #### How to Start a Thread in Java
+
 - Es gibt zwei Möglichkeiten, einen Thread in Java zu starten:
   1. Durch Erstellen einer Klasse, die das `Runnable`-Interface implementiert und die `run()`-Methode überschreibt.
   2. Durch Erstellen einer Klasse, die die `Thread`-Klasse erweitert und die `run()`-Methode überschreibt, Dies ist weit entfernt von produktionsreifem Code, 
@@ -150,7 +158,9 @@ Wenn wir in diesem Zustand `t2.getState()` aufrufen, erhalten wir die Ausgabe:
      minimale und maximale Anzahl von Threads und deren Namenskonvention.
   
 - Beispiel für die erste Methode:
+
 ***Runnable-Interface***
+
 ```java
 class MyRunnable implements Runnable {
    @Override
@@ -166,7 +176,9 @@ public class RunnableExample {
    }
 }
 ```
+
 ***Extend Thread***
+
 ```java
 class MyThread extends Thread {
     @Override
@@ -182,7 +194,9 @@ public class Main {
     }
 }
 ```
+
 ***Lambda-Ausdrücke***
+
 ```java
 public class Main {
    public static void main(String[] args) {
@@ -193,7 +207,9 @@ public class Main {
    }
 }
 ```
+
 ***ExecutorService***
+
 ```java
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -210,6 +226,7 @@ public class Main {
     }
 }
 ```
+
 - Ausführung verzögerter oder periodischer Aufgaben
   Bei der Arbeit mit komplexen Webanwendungen müssen wir möglicherweise Aufgaben zu bestimmten Zeiten oder sogar regelmäßig ausführen.
   Java bietet einige Werkzeuge, die uns bei der Ausführung verzögerter oder wiederkehrender Operationen helfen:
@@ -221,6 +238,7 @@ public class Main {
     regelmäßigen Abständen.
     Er verwendet einen Hintergrund-Thread, um die geplanten Aufgaben auszuführen. 
     Wir können eine Aufgabe planen, indem wir die Methode `schedule()` aufrufen und die gewünschte Verzögerung oder den gewünschten Zeitpunkt angeben.
+
 ```java - DELAY
 TimerTask task = new TimerTask() {
 public void run() {
@@ -231,9 +249,11 @@ Timer timer = new Timer(“Timer”);
 long delay = 1000L;
 timer.schedule(task, delay);
 ```
+
 ```java - REPEAT
 timer.scheduleAtFixedRate(repeatedTask, delay, period);
 ```
+
   - **ScheduledThreadPoolExecutor**: Eine Alternative zum Timer ist der ScheduledThreadPoolExecutor, der eine flexiblere und robustere Möglichkeit bietet, geplante Aufgaben auszuführen. 
     Er ist Teil des java.util.concurrent-Pakets und bietet Funktionen wie die Möglichkeit, mehrere Threads zu verwenden, um geplante Aufgaben auszuführen, und die Fähigkeit, geplante Aufgaben zu stornieren.
     Wenn der Prozessor die Bearbeitung der Aufgabe nicht rechtzeitig vor dem nächsten Auftreten abschließen kann, wartet der ScheduledExecutorService, bis die aktuelle Aufgabe abgeschlossen ist, bevor er die nächste startet.
@@ -274,6 +294,7 @@ Die `wait()`-Methode verfügt über drei überladene Signaturen. Schauen wir uns
 *wait(long timeout)* – wartet bis zum Ablauf der angegebenen Zeit oder bis ein anderer Thread die Methode `notify()` oder `notifyAll()` auf demselben Objekt aufruft, um ihn zu wecken.
 
 *wait(long timeout, int nanos)* – wartet bis zum Ablauf der angegebenen Zeit oder bis ein anderer Thread die Methode `notify()` oder `notifyAll()` auf demselben Objekt aufruft, um ihn zu wecken. Die Zeitangabe erfolgt in Millisekunden und Nanosekunden.
+
 ```java
 public static sinchtonized ping(){
 while(!condition) {
@@ -282,12 +303,291 @@ while(!condition) {
 }
 }
 ```
+
 In diesem Beispiel wird der Thread in einer Schleife angehalten, bis die Bedingung erfüllt ist. Sobald die Bedingung erfüllt ist, wird der Thread durch einen Aufruf von `notify()` oder `notifyAll()` geweckt.   
 notify() – weckt einen einzelnen Thread, der auf einem bestimmten Objekt wartet. Wenn mehrere Threads auf demselben Objekt warten, wird einer von ihnen zufällig ausgewählt und geweckt.
 notifyAll() – weckt alle Threads, die auf einem bestimmten Objekt warten. Alle geweckten Threads konkurrieren dann um die CPU, und einer von ihnen wird fortfahren, während die anderen wieder in den Zustand `WAITING` zurückkehren, wenn sie die CPU nicht erhalten.  
 
 ### Grundlagen
 
+***Übung 3.1***
+
+- Implementiere zwei Threads: Einer zählt von 1–10 („Zähler‑Thread“), der Hauptthread zählt von A–J („Buchstaben‑Thread“). Nutze `sleep(500)` in beiden und `join()` am Ende, um auf Beendigung zu warten
+
+```java
+package uebung_3;
+
+import java.util.ArrayList;
+import java.util.List;
+
+public class Zaehlen {
+    public static void main(String[] args) throws InterruptedException {
+        List buchstaben = new ArrayList();
+        buchstaben.add("a");
+        buchstaben.add("b");
+        buchstaben.add("c");
+        buchstaben.add("d");
+        buchstaben.add("e");
+        buchstaben.add("f");
+        buchstaben.add("g");
+        buchstaben.add("h");
+        buchstaben.add("i");
+        buchstaben.add("j");
+        Thread t1 = new Thread(() ->{
+            for(int i=1; i <=10;i++){
+                System.out.println("t1: " + i);
+                try{
+                    Thread.sleep(500);
+                } catch (InterruptedException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+        });
+        Thread t2 = new Thread(() ->{
+           for(int i=0; i <10;i++){
+               System.out.println("t2: " + buchstaben.get(i));
+               try{
+                   Thread.sleep(500);
+               } catch (InterruptedException e) {
+                   throw new RuntimeException(e);
+               }
+           }
+        });
+        t1.start();
+        t2.start();
+        t1.join();
+        t2.join();
+    }
+}
+```
+
+![ergebnis](ergeb.png)
+
+Hier passiert Folgendes: Beide Threads werden gestartet und führen ihre jeweiligen Schleifen aus. Da beide Threads `sleep(500)` verwenden, wechseln sie sich ungefähr alle 500 Millisekunden ab, um ihre Ausgaben zu drucken. Am Ende warten wir mit `join()` auf die Beendigung beider Threads, bevor das Hauptprogramm fortfährt.
+Und können wir die Ausgabe sehen, die sowohl die Zahlen von 1 bis 10 als auch die Buchstaben von A bis J enthält, aber hier entscheidet sceduler wer drann ist.
+Deshalb könnte die Ausgabe in verschiedenen Reihenfolgen erscheinen, abhängig von der Thread-Planung durch die JVM.
+
+```java
+package uebung_3;
+
+import java.util.ArrayList;
+import java.util.List;
+
+public class Zaehlen {
+    public static void main(String[] args) throws InterruptedException {
+        List<String> buchstaben = new ArrayList<>();
+        buchstaben.add("a");
+        buchstaben.add("b");
+        buchstaben.add("c");
+        buchstaben.add("d");
+        buchstaben.add("e");
+        buchstaben.add("f");
+        buchstaben.add("g");
+        buchstaben.add("h");
+        buchstaben.add("i");
+        buchstaben.add("j");
+
+        Thread t1 = new Thread(() -> {
+            for (int i = 1; i <= 10; i++) {
+                System.out.println("t1: " + i);
+                Thread.yield(); // gibt anderen Threads die Chance
+                try {
+                    Thread.sleep(500);
+                } catch (InterruptedException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+        });
+
+        Thread t2 = new Thread(() -> {
+            for (int i = 0; i < 10; i++) {
+                System.out.println("t2: " + buchstaben.get(i));
+                Thread.yield(); // gibt anderen Threads die Chance
+                try {
+                    Thread.sleep(500);
+                } catch (InterruptedException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+        });
+
+        // Priorität setzen
+        t1.setPriority(Thread.MAX_PRIORITY);
+        t2.setPriority(Thread.MIN_PRIORITY);
+
+        t1.start();
+        t2.start();
+        t1.join();
+        t2.join();
+    }
+}
+```
+
+![yield](yield.png)
+
+Ausgabe sagt uns dass trotzt der Priorität und ``yield()`` beide Threads ungefähr gleich oft ausgeführt werden, was zeigt, dass die Thread-Planung in Java nicht strikt auf Prioritäten basiert und dass `yield()` keine Garantie dafür gibt, dass andere Threads sofort ausgeführt werden.
+Oder dass sich schön abwechseln, was zeigt, dass die Thread-Planung in Java nicht strikt auf Prioritäten basiert und dass `yield()` keine Garantiedafür.
+
+***Übung 3.2***
+
+- Erweitere die vorherige Zähler‑Thread‑Aufgabe um einen gemeinsamen `static int count = 0`. Lass beide Threads `count++` 1000x ausführen und `System.out.println(count)` am Ende. Warum ist die Ausgabe oft < 2000?
+
+```java
+package uebung_3;
+
+public class Count {
+    static int count = 0;
+
+    public static void main(String[] args) throws InterruptedException {
+
+        Thread t1 = new Thread(() -> {
+            for (int i = 0; i < 1000; i++) {
+                count++;
+            }
+        });
+
+        Thread t2 = new Thread(() -> {
+            for (int i = 0; i < 1000; i++) {
+                count++;
+            }
+        });
+
+        t1.start();
+        t2.start();
+        t1.join();
+        t2.join();
+
+        System.out.println(count);
+    }
+}
+```
+![summe](summe.png)
+
+Die Ausgabe ist oft weniger als 2000, weil die Operation `count++` nicht atomar ist. 
+Sie besteht aus mehreren Schritten: Lesen des aktuellen Werts von `count`, 
+Inkrementieren des Werts und Schreiben des neuen Werts zurück in `count`. 
+Wenn zwei Threads gleichzeitig `count++` ausführen, 
+können sie beide den gleichen Wert von `count` lesen, 
+bevor einer von ihnen den neuen Wert zurückschreibt. 
+Dies führt zu einem sogenannten "Race Condition", 
+bei dem die endgültige Ausgabe von der genauen Reihenfolge der 
+Thread-Ausführung abhängt. In einigen Fällen kann dies dazu führen, 
+dass einige Inkrementierungen verloren gehen, was zu einer Ausgabe von weniger als 2000 führt.
+
+- Zeichne ein Diagramm der Thread‑Interleaving, das den Fehler zeigt.
+
+![diagram](summen_diagram.png)
+
 ### Synchronisation
+
+***Übung 4.1***
+
+- Mache den vorherigen Zähler thread‑sicher mit `synchronized`-Blöcken (Lock auf `this` oder `Counter.class`). Teste mit 4 Threads parallel; der finale `count` muss immer 4000 sein.
+
+```java
+package uebung_4;
+
+public class SynchCount {
+    static int count = 0;
+
+    public static void main(String[] args) throws InterruptedException {
+
+        Runnable task = () -> {
+            for (int i = 0; i < 1000; i++) {
+                synchronized (SynchCount.class) {
+                    count++;
+                }
+            }
+        };
+
+        Thread t1 = new Thread(task);
+        Thread t2 = new Thread(task);
+        Thread t3 = new Thread(task);
+        Thread t4 = new Thread(task);
+
+        t1.start();
+        t2.start();
+        t3.start();
+        t4.start();
+
+        t1.join();
+        t2.join();
+        t3.join();
+        t4.join();
+
+        System.out.println(count); // immer 4000
+    }
+}
+```
+
+![synch](s_t4.png)
+
+***Übung 4.2***
+
+- Implementiere einen einfachen Ping‑Pong‑Zähler: Zwei Threads wechseln sich ab (Thread1: „Ping“, Thread2: „Pong“), mit `wait()`/`notify()` in einem synchronisierten Block. Starte mit 10 Runden.
+
+```java
+package uebung_4;
+
+public class PingPong {
+
+    private static final Object lock = new Object();
+    private static boolean pingTurn = true; // Ping beginnt
+
+    public static void main(String[] args) throws InterruptedException {
+
+        Thread ping = new Thread(() -> {
+            for (int i = 0; i < 10; i++) {
+                synchronized (lock) {
+                    while (!pingTurn) {
+                        try {
+                            lock.wait();
+                        } catch (InterruptedException e) {
+                            throw new RuntimeException(e);
+                        }
+                    }
+                    System.out.println("Ping");
+                    pingTurn = false;
+                    lock.notifyAll();
+                }
+            }
+        });
+
+        Thread pong = new Thread(() -> {
+            for (int i = 0; i < 10; i++) {
+                synchronized (lock) {
+                    while (pingTurn) {
+                        try {
+                            lock.wait();
+                        } catch (InterruptedException e) {
+                            throw new RuntimeException(e);
+                        }
+                    }
+                    System.out.println("Pong");
+                    pingTurn = true;
+                    lock.notifyAll();
+                }
+            }
+        });
+
+        ping.start();
+        pong.start();
+
+        ping.join();
+        pong.join();
+    }
+}
+```
+
+![pingpong](pingpong.png)
+
+- Was passiert mit `notify()` statt `notifyAll()`? Teste und erkläre.
+
+![notify](pingpong.png)
+
+Mit nut 2 Threads in diesem Beispiel, `notify()` und `notifyAll()` haben den gleichen Effekt, da es nur einen Thread gibt, der auf das Lock wartet.
+Wenn wir jedoch mehr als 2 Threads haben, könnte `notify()` einen falschen Thread wecken, der nicht derjenige ist, der gerade an der Reihe ist, was zu einem Deadlock führen könnte, wenn der geweckte Thread auf das gleiche Lock wartet. 
+`notifyAll()` hingegen weckt alle wartenden Threads, und derjenige, der an der Reihe ist, wird fortfahren, während die anderen wieder in den Zustand `WAITING` zurückkehren, wenn sie die CPU nicht erhalten. 
+Daher ist `notifyAll()` sicherer, wenn mehrere Threads auf dasselbe Lock warten, da es das Risiko von Deadlocks reduziert.
 
 ## Fortgeschritten Anwendungen
