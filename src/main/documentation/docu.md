@@ -591,3 +591,325 @@ Wenn wir jedoch mehr als 2 Threads haben, könnte `notify()` einen falschen Thre
 Daher ist `notifyAll()` sicherer, wenn mehrere Threads auf dasselbe Lock warten, da es das Risiko von Deadlocks reduziert.
 
 ## Fortgeschritten Anwendungen
+
+***Lock API***
+
+Ein synchronisierter Block ist vollständig in einer Methode enthalten. Wir können die Sperr-APIs `lock()` und `unlock()` in separaten Methoden ausführen.
+Ein synchronisierter Block unterstützt die Fairness nicht. Jeder Thread kann die Sperre erhalten, sobald sie aufgehoben wurde, und es kann keine Präferenz angegeben werden. Wir können Fairness innerhalb der Lock-APIs erreichen, indem wir die Fairness-Eigenschaft angeben. Dadurch wird sichergestellt, dass der am längsten wartende Thread Zugriff auf die Sperre erhält.
+Ein Thread wird blockiert, wenn er keinen Zugriff auf den synchronisierten Block erhält. Die Lock-API bietet die Methode `tryLock()`. Der Thread erhält nur dann eine Sperre, wenn sie verfügbar ist und nicht von einem anderen Thread gehalten wird. Dies reduziert die Blockierungszeit des Threads, der auf die Sperre wartet.
+Ein Thread, der sich im Status *„Warten“* auf den Zugriff auf den synchronisierten Block befindet, kann nicht unterbrochen werden. Die Lock-API bietet eine Methode `lockInterruptably()`, mit der der Thread unterbrochen werden kann, wenn er auf die Sperre wartet.
+
+**void lock()** – Erwerben Sie die Sperre, wenn sie verfügbar ist. Wenn die Sperre nicht verfügbar ist, wird ein Thread blockiert, bis die Sperre aufgehoben wird.
+**void lockInterruptably()** – Dies ähnelt lock(), ermöglicht jedoch die Unterbrechung des blockierten Threads und die Wiederaufnahme der Ausführung durch eine ausgelöste java.lang.InterruptedException.
+**boolean tryLock()** – Dies ist eine nicht blockierende Version der lock()-Methode. Es wird versucht, die Sperre sofort zu erhalten und gibt true zurück, wenn die Sperre erfolgreich ist.
+**boolean tryLock(long timeout, TimeUnit timeUnit)** – Dies ähnelt tryLock(), außer dass es das angegebene Timeout abwartet, bevor es den Versuch aufgibt, die Sperre zu erhalten.
+**void unlock()** entsperrt die Lock-Instanz.
+Eine gesperrte Instanz sollte immer entsperrt werden, um einen Deadlock-Zustand zu vermeiden.
+Ein empfohlener Codeblock zur Verwendung der Sperre sollte einen Try/Catch- und einen Final-Block enthalten:
+
+#### ReentrantLock
+
+Die ReentrantLock-Klasse implementiert die Lock-Schnittstelle. Es bietet die gleiche Parallelität und Speichersemantik wie die implizite Monitorsperre, auf die über synchronisierte Methoden und Anweisungen zugegriffen wird, mit erweiterten Funktionen.
+
+```java
+import java.util.concurrent.locks.ReentrantLock;
+
+public class SharedObjectWithLock {
+    //...
+    ReentrantLock lock = new ReentrantLock();
+    int counter = 0;
+
+    public void perform() {
+        lock.lock();
+        try {
+            // Critical section here
+            count++;
+        } finally {
+            lock.unlock();
+        }
+    }
+    //...
+}
+```
+
+Wir müssen sicherstellen, dass wir die `lock()` - und `unlock()`-Aufrufe in den ***try-finally-Block*** einschließen, um Deadlock-Situationen zu vermeiden.
+
+```java
+public void performTryLock(){
+    //...
+    boolean isLockAcquired = lock.tryLock(1, TimeUnit.SECONDS);
+    
+    if(isLockAcquired) {
+        try {
+            //Critical section here
+        } finally {
+            lock.unlock();
+        }
+    }
+    //...
+}
+
+```
+
+In diesem Fall wartet der Thread, der `tryLock()` aufruft, eine Sekunde und gibt das Warten auf, wenn die Sperre nicht verfügbar ist.
+
+#### ReadWriteLock
+
+Lesesperre – Wenn kein Thread die Schreibsperre erworben oder angefordert hat, können mehrere Threads die Lesesperre erwerben.
+Schreibsperre – Wenn keine Threads lesen oder schreiben, kann nur ein Thread die Schreibsperre erhalten.
+
+```java
+public class SynchronizedHashMapWithReadWriteLock {
+
+    Map<String,String> syncHashMap = new HashMap<>();
+    ReadWriteLock lock = new ReentrantReadWriteLock();
+    // ...
+    Lock writeLock = lock.writeLock();
+
+    public void put(String key, String value) {
+        try {
+            writeLock.lock();
+            syncHashMap.put(key, value);
+        } finally {
+            writeLock.unlock();
+        }
+    }
+    ...
+    public String remove(String key){
+        try {
+            writeLock.lock();
+            return syncHashMap.remove(key);
+        } finally {
+            writeLock.unlock();
+        }
+    }
+    //...
+}
+```
+
+Für beide Schreibmethoden müssen wir den kritischen Abschnitt mit der Schreibsperre umgeben – nur ein Thread kann darauf zugreifen:
+
+```java
+Lock readLock = lock.readLock();
+//...
+public String get(String key){
+    try {
+        readLock.lock();
+        return syncHashMap.get(key);
+    } finally {
+        readLock.unlock();
+    }
+}
+
+public boolean containsKey(String key) {
+    try {
+        readLock.lock();
+        return syncHashMap.containsKey(key);
+    } finally {
+        readLock.unlock();
+    }
+}
+```
+Für beide Lesemethoden müssen wir den kritischen Abschnitt mit der Lesesperre umgeben. Mehrere Threads können auf diesen Abschnitt zugreifen, wenn kein Schreibvorgang ausgeführt wird.,
+
+#### Condition
+
+Die Condition-Klasse bietet einem Thread die Möglichkeit, auf das Eintreten einer Bedingung zu warten, während er den kritischen Abschnitt ausführt.
+Dies kann auftreten, wenn ein Thread Zugriff auf den kritischen Abschnitt erhält, aber nicht über die erforderliche Bedingung zum Ausführen seiner Operation verfügt. Beispielsweise kann ein Lesethread Zugriff auf die Sperre einer gemeinsam genutzten Warteschlange erhalten, die noch keine Daten zum Verarbeiten hat.
+Traditionell stellt Java die Methoden `wait()`, `notify()` und `notifyAll()` für die Thread-Interkommunikation bereit.
+Bedingungen haben ähnliche Mechanismen, wir können jedoch auch mehrere Bedingungen angeben:
+
+```java
+public class ReentrantLockWithCondition {
+
+    Stack<String> stack = new Stack<>();
+    int CAPACITY = 5;
+
+    ReentrantLock lock = new ReentrantLock();
+    Condition stackEmptyCondition = lock.newCondition();
+    Condition stackFullCondition = lock.newCondition();
+
+    public void pushToStack(String item){
+        try {
+            lock.lock();
+            while(stack.size() == CAPACITY) {
+                stackFullCondition.await();
+            }
+            stack.push(item);
+            stackEmptyCondition.signalAll();
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    public String popFromStack() {
+        try {
+            lock.lock();
+            while(stack.size() == 0) {
+                stackEmptyCondition.await();
+            }
+            return stack.pop();
+        } finally {
+            stackFullCondition.signalAll();
+            lock.unlock();
+        }
+    }
+}
+```
+
+####  Executor, ExecutorService und Executors
+**Executor** ist die zentrale übergeordnete Schnittstelle im Parallelitäts-Framework von Java, die die Aufgabenübermittlung von der Ausführungsmechanik entkoppelt und über ihre Methode *„execute()“* nur ausführbare Aufgaben akzeptiert, ohne Ergebnisse zurückzugeben. **ExecutorService** erweitert Executor um erweiterte Funktionen, einschließlich der Methode *„submit()“*, die sowohl ausführbare als auch aufrufbare Aufgaben akzeptiert und ein Future-Objekt zum Verfolgen asynchroner Ergebnisse zurückgibt, sowie Methoden zur Verwaltung der Poolbeendigung wie *„shutdown()“* und *„shutdownNow()“*.
+Die Executors-Klasse fungiert als Dienstprogrammfabrik, die statische Methoden zum Erstellen verschiedener vorkonfigurierter **ExecutorService-Implementierungen** bereitstellt, wie z. B. *newFixedThreadPool()*, *newCachedThreadPool()*, *newSingleThreadExecutor()* und *newScheduledThreadPool()*, wodurch die Erstellung von Thread-Pools ohne manuelle Konfiguration vereinfacht wird.
+Zu den wichtigsten Unterschieden zwischen diesen Komponenten gehören:
+
+***Hierarchie***: Executor ist die Basisschnittstelle, ExecutorService ist die Unterschnittstelle, die Executor erweitert, und Executors ist die konkrete Dienstprogrammklasse.
+***Aufgabenbehandlung***: Executor.execute() verarbeitet nur Runnable und gibt void zurück, während ExecutorService.submit() sowohl Runnable als auch Callable verarbeitet und eine Zukunft zurückgibt.
+***Verwaltung***: ExecutorService bietet Beendigungskontrollen (Herunterfahren, WaitTermination) und Ergebnisabruf, Funktionen, die in der grundlegenden Executor-Schnittstelle fehlen.
+***Erstellung***: Entwickler instanziieren ExecutorService-Implementierungen normalerweise über Executors-Factory-Methoden, anstatt sie direkt zu erstellen.
+
+```java
+ExecutorService executor = Executors.newFixedThreadPool(10);
+```
+Beispielsweise erstellt die folgende Codezeile einen Thread-Pool mit 10 Threads.
+
+Die **execute()** Methode ist Leere und bietet keine Möglichkeit, das Ergebnis der Ausführung einer Aufgabe abzurufen oder den Status der Aufgabe zu überprüfen (wird sie ausgeführt):
+```java
+executorService.execute(runnableTask);
+```
+Die **submit()** Methode akzeptiert sowohl Runnable- als auch Callable-Aufgaben und gibt ein Future-Objekt zurück, mit dem wir den Status der Aufgabe überprüfen und das Ergebnis abrufen können:
+```java
+Future<?> future = executorService.submit(runnableTask);
+```
+Die **invokeAll()** Methode akzeptiert eine Sammlung von Callable-Aufgaben, führt sie aus und gibt eine Liste von Future-Objekten zurück, die die Ergebnisse der Aufgaben repräsentieren:
+```java
+List<Callable<String>> tasks = Arrays.asList(callableTask1, callableTask2);
+List<Future<String>> futures = executorService.invokeAll(tasks);
+```
+Die **invokeAny()** Methode akzeptiert eine Sammlung von Callable-Aufgaben, führt sie aus und gibt das Ergebnis der ersten erfolgreich abgeschlossenen Aufgabe zurück:
+```java
+List<Callable<String>> tasks = Arrays.asList(callableTask1, callableTask2);
+String result = executorService.invokeAny(tasks);
+```
+Die **shutdown()** Methode führt nicht zur sofortigen Zerstörung der ExecutorService. Es wird die ExecutorService Hören Sie auf, neue Aufgaben anzunehmen, und fahren Sie herunter, nachdem alle laufenden Threads ihre aktuelle Arbeit beendet haben:
+```java
+List<Runnable> notExecutedTasks = executorService.shutdown();
+```
+
+Die **shutdownNow()** Methode versucht, die zu zerstören ExecutorService sofort, aber es garantiert nicht, dass alle laufenden Threads gleichzeitig gestoppt werden:
+```java
+List<Runnable> notExecutedTasks = executorService.shutdownNow();
+```
+
+#### Runnable vs Callable
+
+Die Runnable-Schnittstelle (im Paket java.lang) definiert eine Aufgabe mit der Methode ***run()***, die keinen Rückgabewert hat und keine geprüften Ausnahmen (checked exceptions) werfen kann; sie kann direkt mit Thread oder ExecutorService ausgeführt werden.  Im Gegensatz dazu bietet die Callable-Schnittstelle (im Paket java.util.concurrent) die Methode ***call()***, die einen Wert des Typs `V` zurückgibt und geprüfte Ausnahmen propagieren kann; Callable-Aufgaben können jedoch nur über ExecutorService (nicht direkt über den Thread-Konstruktor) ausgeführt werden und liefern ein Future-Objekt zur Ergebnismeldung.
+
+Hauptunterschiede im Überblick:
+*Rückgabewert*: run() ist void und liefert kein Ergebnis, während call() einen generischen Typ zurückgibt.
+*Ausnahmen*: run() muss geprüfte Ausnahmen intern abfangen, call() darf sie werfen.
+*Ausführung*: Runnable wird mit new Thread(runnable).start() oder execute() genutzt, Callable erfordert submit() und Future.get().
+*Paket*: Runnable stammt aus java.lang, Callable aus java.util.concurrent.
+Beide Schnittstellen sind funktionale Schnittstellen mit einer einzelnen abstrakten Methode und können in Lambda-Ausdrücken (Java 8+) verwendet werden, um Aufgaben asynchron auszuführen.
+
+```java
+public interface Runnable {
+    void run();
+}
+
+public interface Callable<V> {
+    V call() throws Exception;
+}
+
+```
+
+#### Future und CompletableFuture
+
+Die **Future-Schnittstelle**, die 2005 in Java 5 eingeführt wurde, dient als schreibgeschützter Container für das Ergebnis einer asynchronen Berechnung, bietet jedoch keine Methoden, um Berechnungen zu kombinieren oder Fehler zu behandeln.  Im Gegensatz dazu ist **CompletableFuture** (seit Java 8), das sowohl *Future* als auch *CompletionStage* *implementiert*, ein Framework mit über 50 Methoden, das die ***Verkettung, Kombination und Fehlerbehandlung asynchroner Schritte ermöglicht***.
+Während Future-Objekte primär über die `get()`-Methode abgerufen werden und Ausnahmen manuell behandelt werden müssen, erlaubt CompletableFuture den Einsatz von Lambda-Ausdrücken und Methodenketten für komplexere Workflows.  Typische Anwendungsfälle für CompletableFuture umfassen:
+
+**Asynchrone Ausführung**: Nutzung von supplyAsync() für ergebnisproduzierende Aufgaben oder runAsync() für Aufgaben ohne Rückgabewert.
+**Verarbeitungsketten**: Transformation von Ergebnissen mit thenApply(), Konsumieren mit thenAccept() oder Abarbeiten nach Abschluss mit whenComplete().
+**Kombination und Synchronisation**: Warten auf mehrere Aufgaben mit allOf() oder Ausführen der ersten fertigen Aufgabe mit anyOf().
+**Fehlerbehandlung**: Abfangen von Ausnahmen direkt in der Kette mittels exceptionally() oder handle().
+CompletableFuture fungiert somit als erweiterte Zukunftsversion der Future, die asynchrone Programmierung durch funktionale Verkettung und integrierte Fehlermechanismen deutlich effizienter und lesbarer macht. 
+
+- Erstelle einen `ExecutorService` mit 3 Threads (`Executors.newFixedThreadPool(3)`). Sende 10 `Runnable`-Aufgaben (z.B. „Aufgabe X läuft“), die `sleep(1000)` machen. Schließe den Pool mit `shutdown()`.
+
+```java
+package uebung_5;
+
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
+public class ExecutoRunnable {
+    public static void main(String[] args) {
+        ExecutorService executor = Executors.newFixedThreadPool(3);
+
+        Runnable task = () -> {
+            try {
+                System.out.println("Aufgabe läuft in: " + Thread.currentThread().getName());
+                Thread.sleep(1000);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        };
+
+        // 10 Aufgaben senden
+        for (int i = 0; i < 10; i++) {
+            executor.execute(task);
+        }
+
+        executor.shutdown();
+    }
+}
+```
+
+- Ersetze `Runnable` durch `Callable<Integer>` (berechnet Zufallszahl), hole mit `Future` die Ergebnisse und summiere sie.
+
+```java
+
+package uebung_5;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Random;
+import java.util.concurrent.*;
+
+public class ExecutorCallable {
+    public static void main(String[] args) {
+        ExecutorService executor = Executors.newFixedThreadPool(3);
+
+        List<Future<Integer>> futures = new ArrayList<>();
+        Random random = new Random();
+
+        // 10 Callable-Tasks erstellen und absenden
+        for (int i = 1; i <= 10; i++) {
+            Callable<Integer> task = () -> {
+                int zahl = random.nextInt(100); // Zufallszahl 0–99
+                System.out.println("Berechnet: " + zahl + " in " + Thread.currentThread().getName());
+                Thread.sleep(1000);
+                return zahl;
+            };
+
+            futures.add(executor.submit(task)); // submit statt execute!
+        }
+
+        // Ergebnisse holen und aufsummieren
+        int summe = 0;
+
+        for (Future<Integer> future : futures) {
+            try {
+                summe += future.get(); // wartet auf Ergebnis
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            } catch (ExecutionException e) {
+                e.printStackTrace();
+            }
+        }
+
+        System.out.println("Gesamtsumme: " + summe);
+
+        executor.shutdown();
+    }
+}
+```
