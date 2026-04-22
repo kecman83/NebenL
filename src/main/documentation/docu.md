@@ -913,3 +913,319 @@ public class ExecutorCallable {
     }
 }
 ```
+#### Thread-sichere Datenstrukturen und atomare Operationen
+
+***Synchronisierte Collections vs. `java.util.concurrent`‑Collections***
+
+`Collections.synchronizedMap()` blockiert alle Zugriffe über einen einzigen Lock, während `ConcurrentHashMap` feingranulare Sperren 
+bzw. lock‑freie Lesezugriffe bietet und dadurch deutlich besser skaliert.
+
+Beide Varianten sind threadsicher, aber sie verfolgen völlig unterschiedliche Strategien:
+
+    SynchronizedMap = globale Sperre → einfache, aber schlecht skalierende Thread-Sicherheit
+    ConcurrentHashMap = segmentierte / bucket-basierte Sperren + lock‑freie Reads → hohe Parallelität
+![](hash.png)
+
+#### ConcurrentMap – Zweck und garantierte Eigenschaften
+**ConcurrentMap** wurde eingeführt, um eine *Schnittstelle* für Maps bereitzustellen, die **hohen Durchsatz** und **Thread-Sicherheit** gleichzeitig ermöglichen.  
+Die Spezifikation verlangt, dass Implementierungen:
+
+- **atomare Operationen** für typische Race‑Condition‑gefährdete Abläufe bereitstellen
+- **Speicherkonsistenz** garantieren (Happens‑Before‑Beziehungen)
+- **Null‑Schlüssel und Null‑Werte verbieten** (durch Überschreiben der Default-Methoden)   [Baeldung](https://www.baeldung.com/java-concurrent-map)
+
+##### Überschriebene Default-Methoden (Null-Support deaktiviert)
+- `getOrDefault`
+- `forEach`
+- `replaceAll`
+- `computeIfAbsent`
+- `computeIfPresent`
+- `compute`
+- `merge`  
+
+##### Atomare Methoden ohne Default-Implementierung
+- `putIfAbsent`
+- `remove(key, value)`
+- `replace(key, oldValue, newValue)`
+- `replace(key, value)`  
+
+Diese Methoden verhindern klassische Race Conditions wie das bekannte Muster:
+
+```java
+if (!map.containsKey(k)) map.put(k, v);
+```
+
+welches in Multithreading-Umgebungen fehlerhaft ist. Stattdessen muss `putIfAbsent` verwendet werden.   [Stack Overflow](https://stackoverflow.com/questions/14947723/is-concurrenthashmap-totally-safe)
+
+---
+
+#### ConcurrentHashMap – Implementierung von ConcurrentMap
+**ConcurrentHashMap** ist die Standard-Implementierung von ConcurrentMap und optimiert für hohe Parallelität.
+
+##### Architektur
+**Leseoperationen sind lock‑frei**
+**Schreiboperationen sperren nur den ersten Node eines Buckets**
+Buckets werden **lazy** initialisiert
+
+### Konstruktorparameter
+`concurrencyLevel` war vor Java 8 relevant (Segmentanzahl).  
+Seit Java 8 existiert er nur noch aus **Abwärtskompatibilität** – er beeinflusst nur die Anfangsgröße.  
+
+
+#### Thread-Sicherheit & Speicherkonsistenz
+ConcurrentMap garantiert, dass:
+
+- **Aktionen vor dem Einfügen eines Objekts** in die Map  
+  → **Happens-Before**
+- **Aktionen nach dem Lesen/Entfernen** desselben Objekts in einem anderen Thread stehen  
+
+Das bedeutet:  
+**Alle Updates an einem Schlüssel sind für nachfolgende Reads sichtbar**, ohne dass globale Locks nötig sind.
+
+### Beispiel: Speicherinkonsistenz bei HashMap
+Dein Beispiel zeigt korrekt, dass `computeIfPresent` auf einer `HashMap` zu inkonsistenten Ergebnissen führt, weil HashMap keine Speicherkonsistenz garantiert.  
+Mit `ConcurrentHashMap` dagegen erhält man **immer** das korrekte Ergebnis (100).  
+Dies entspricht exakt dem Verhalten, das die Spezifikation beschreibt.
+
+#### Null-Schlüssel und Null-Werte
+`ConcurrentHashMap` wirft **NullPointerException**, wenn man versucht:
+
+- `put(null, value)`
+- `put(key, null)`
+
+Dies ist explizit so spezifiziert.
+
+Bei `compute*` und `merge` gilt:  
+**Ein berechneter Wert von `null` entfernt den Eintrag.**  
+Das ist beabsichtigt und entspricht der Map-Semantik.
+
+
+#### CopyOnWriteArrayList
+
+CopyOnWriteArrayList ist die perfekte Wahl für hochparallele Lesezugriffe mit seltenen Mutationen, 
+da sie durch Copy-on-Write und Snapshot-Iteratoren absolute Iterationssicherheit ohne Synchronisation bietet.
+
+CopyOnWriteArrayList ist eine threadsichere Listenimplementierung, die ohne Synchronisation auskommt, indem sie bei jeder Mutation eine vollständige Kopie des internen Arrays erzeugt.
+Konsequenzen:
+
+    Lesen ist extrem schnell (keine Locks, keine Blockierung)
+
+    Schreiben ist teuer, da eine vollständige Kopie erzeugt wird
+
+    Iteratoren sind snapshot-basiert und dadurch immer sicher
+
+Diese Struktur eignet sich ideal für Szenarien, in denen viel gelesen, aber selten geschrieben wird.
+
+Beim Aufruf von:
+```java
+Iterator<Integer> iterator = numbers.iterator();
+```
+erhält man einen Iterator, der auf einem unveränderlichen Snapshot basiert.
+
+Iteration während eines Inserts
+Ausgangsliste:
+```java
+CopyOnWriteArrayList<Integer> numbers =
+new CopyOnWriteArrayList<>(new Integer[]{1, 3, 5, 8});
+```
+
+Schritt 1: Iterator erstellen
+
+```java
+   Iterator<Integer> iterator = numbers.iterator();
+```
+Snapshot enthält: [1, 3, 5, 8]
+
+Schritt 2: Element hinzufügen
+
+```java
+numbers.add(10);
+```
+→ Intern wird ein neues Array erzeugt: [1, 3, 5, 8, 10]  
+→ Der Iterator sieht diese Änderung nicht.
+
+Schritt 3: Iteration über den alten Iterator
+
+```java
+iterator.forEachRemaining(result::add);
+```
+Ergebnis: [1, 3, 5, 8]
+
+Schritt 4: Neuer Iterator
+
+```java
+Iterator<Integer> iterator2 = numbers.iterator();
+```
+Snapshot enthält jetzt: [1, 3, 5, 8, 10]
+Ergebnis: [1, 3, 5, 8, 10]
+
+CopyOnWriteArrayList ist ideal, wenn:
+
+    viele Threads lesen, aber nur wenige schreiben
+
+    Iterationen häufiger sind als Mutationen
+
+    absolute Iterationssicherheit benötigt wird
+
+    Datenstrukturen relativ klein sind
+
+Typische Beispiele:
+
+    Listener-Listen (z. B. Event-Handler)
+
+    Caches mit seltenen Updates
+
+    Konfigurationsdaten, die selten geändert werden
+
+
+#### Atomic Operations
+
+##### AtomicInteger, AtomicReference & lock‑freie Aktualisierung
+
+## 1. Grundidee der Atomic‑Klassen
+Die Klassen im Paket `java.util.concurrent.atomic` (z. B. `AtomicInteger`, `AtomicLong`, `AtomicReference`, `AtomicBoolean`) bieten **atomare Operationen ohne Synchronisation**.
+
+Sie basieren vollständig auf **CAS (Compare‑And‑Swap)** und ermöglichen:
+
+- lock‑freie Updates
+- garantierte Atomizität
+- hohe Skalierbarkeit
+- keine Blockierung von Threads
+
+Damit sind sie die elementaren Bausteine vieler lock‑freier Datenstrukturen.
+
+---
+
+## 2. AtomicInteger – Beispiel für lock‑freie Inkrementierung
+Ein klassisches Beispiel ist das atomare Inkrement:
+
+```java
+AtomicInteger counter = new AtomicInteger(0);
+counter.incrementAndGet();
+```
+
+### Was passiert intern?
+`incrementAndGet()` ist **kein**:
+
+```java
+synchronized(counter) { counter = counter + 1; }
+```
+
+sondern eine CAS‑Schleife:
+
+```java
+int oldValue;
+int newValue;
+do {
+    oldValue = counter.get();
+    newValue = oldValue + 1;
+} while (!counter.compareAndSet(oldValue, newValue));
+```
+
+### Eigenschaften:
+- **kein Lock**
+- **kein Blockieren**
+- **kein Kontextwechsel**
+- **atomar garantiert durch CPU‑Instruktion**
+
+## 3. AtomicReference – atomare Updates komplexer Objekte
+`AtomicReference<T>` ermöglicht CAS‑basierte Aktualisierung **beliebiger Objektreferenzen**.
+
+Beispiel:
+
+```java
+AtomicReference<String> ref = new AtomicReference<>("A");
+
+ref.compareAndSet("A", "B");  // erfolgreich
+ref.compareAndSet("A", "C");  // schlägt fehl
+```
+
+### Typische Einsatzgebiete:
+- Implementierung lock‑freier Listen, Stacks, Queues
+- atomare Updates von Immutable‑Objekten
+- ABA‑Problem‑Erkennung (mit AtomicStampedReference)
+
+
+## 4. Warum Atomic‑Klassen so schnell sind
+### Vorteile:
+- **keine Synchronisation**
+- **keine Sperren**
+- **keine Deadlocks**
+- **keine Thread‑Blockierung**
+- **extrem geringe Latenz**
+- **perfekt für hochparallele Systeme**
+
+### Nachteile:
+- CAS‑Schleifen können bei hoher Contention viele Wiederholungen benötigen
+- ABA‑Problem möglich (gelöst durch `AtomicStampedReference`)
+- komplexere Logik als bei einfachen Locks
+
+
+## 5. Typische Methoden der Atomic‑Klassen
+
+### Für Zahlen (`AtomicInteger`, `AtomicLong`)
+- `get()`
+- `set()`
+- `incrementAndGet()`
+- `getAndIncrement()`
+- `addAndGet(delta)`
+- `compareAndSet(expect, update)`
+
+### Für Referenzen (`AtomicReference<T>`)
+- `get()`
+- `set()`
+- `compareAndSet(expect, update)`
+- `getAndSet(newValue)`
+
+Diese Methoden sind **alle atomar** und basieren auf CAS.
+
+
+## 6. Beispiel: Lock‑freier Zähler
+Ein lock‑freier Zähler mit `AtomicInteger`:
+
+```java
+class LockFreeCounter {
+    private final AtomicInteger value = new AtomicInteger(0);
+
+    public void increment() {
+        value.incrementAndGet();
+    }
+
+    public int get() {
+        return value.get();
+    }
+}
+```
+
+### Eigenschaften:
+- 100 % thread‑sicher
+- keine Locks
+- extrem performant
+
+
+## 7. Beispiel: Lock‑freier Stack (vereinfachtes Prinzip)
+
+```java
+class Node<T> {
+    final T value;
+    final Node<T> next;
+    Node(T value, Node<T> next) {
+        this.value = value;
+        this.next = next;
+    }
+}
+
+class LockFreeStack<T> {
+    private final AtomicReference<Node<T>> head = new AtomicReference<>();
+
+    public void push(T value) {
+        Node<T> newHead;
+        Node<T> oldHead;
+        do {
+            oldHead = head.get();
+            newHead = new Node<>(value, oldHead);
+        } while (!head.compareAndSet(oldHead, newHead));
+    }
+}
+```
+Das ist das Grundprinzip vieler lock‑freier Datenstrukturen in Java.
