@@ -1402,3 +1402,4 @@ ForkJoinPool dagegen:
 - erlaubt **dynamische** Verteilung
 - nutzt **rekursive Zerlegung**
 - verhindert **Thread‑Starvation** durch Stealing
+
