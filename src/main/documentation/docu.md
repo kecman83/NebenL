@@ -1229,3 +1229,176 @@ class LockFreeStack<T> {
 }
 ```
 Das ist das Grundprinzip vieler lock‑freier Datenstrukturen in Java.
+
+
+#### Parallel Streams
+`parallelStream()` lohnt sich **nur**, wenn du *viel Daten* (hohes **N**) und *viel Arbeit pro Element* (hohes **Q**) hast, die Datenquelle gut teilbar ist (z. B. **ArrayList**, Arrays), und die Merge‑Operation billig ist (z. B. **reduce**). In allen anderen Fällen ist ein normaler Stream oft schneller.
+
+#### Kernaussagen aus dem Baeldung‑Artikel (kompakt & didaktisch)
+
+#### 1. Wann *nicht* parallelisieren?
+- **Kleine Datenmengen** → Overhead frisst den Vorteil auf.
+- **Geringe Arbeit pro Element** (z. B. Summieren) → Q zu klein.
+- **Schlecht teilbare Datenstrukturen**
+    - `LinkedList`
+    - komplexe Bäume
+- **Teure Merge‑Operationen**
+    - `collect(Collectors.toSet())`
+    - Gruppierungen
+- **Schlechte Memory Locality**
+    - viele Objekte statt primitive Arrays
+    - viele Pointer → Cache Misses
+
+#### 2. Wann *lohnt* sich parallel?
+- **Große Datenmengen** (N > 10.000 als Faustregel)
+- **Hohe Rechenlast pro Element** (Q groß)
+- **Gut teilbare Datenquellen**
+    - `ArrayList`
+    - primitive Arrays
+- **Billige Merge‑Operationen**
+    - `reduce`
+    - einfache Summen
+- **File‑I/O‑lastige Tasks**
+    - z. B. Suche in vielen Dateien
+
+---
+
+#### Technische Hintergründe (wichtig für Performance‑Analyse)
+
+### ForkJoinPool
+- Parallel Streams nutzen **ForkJoinPool.commonPool()**
+- Anzahl Threads = *CPU‑Kerne – 1*
+- Globaler Pool → beeinflusst **alle** parallel Streams
+- Custom Pools möglich, aber selten sinnvoll
+
+### Splitting Costs
+- Arrays & ArrayList → **billig**
+- LinkedList → **teuer** (kein Random Access)
+
+### Merging Costs
+- `reduce` → billig
+- `collect` → teuer (Synchronisation, Hashing)
+
+### Memory Locality
+- Primitive Arrays → beste Cache‑Nutzung
+- `Integer[]` → schlechter
+- Objektgraphen → noch schlechter
+
+---
+
+#### NQ‑Modell (Oracle)
+- **N = Anzahl Elemente**
+- **Q = Arbeit pro Element**
+- Parallelisierung lohnt sich, wenn **N × Q groß** ist.
+- Für triviale Operationen (Summe) → N > 10.000
+
+---
+
+#### Praktische Regeln für deinen Unterricht / Code Reviews
+
+### Verwende `parallelStream()` wenn:
+- du **CPU‑bound** bist
+- du **viele Elemente** hast
+- die Operation **teuer** ist
+- die Datenquelle **gut teilbar** ist
+- die Merge‑Operation **einfach** ist
+
+### Verwende **kein** `parallelStream()` wenn:
+- du **I/O‑bound** bist (außer File‑Search)
+- du **kleine Collections** hast
+- du **LinkedList** oder komplexe Strukturen nutzt
+- du **Seiteneffekte** hast
+- du **Reihenfolge** brauchst
+- du **Collectors.toMap / toSet** nutzt
+
+#### Didaktisch gutes Beispiel
+
+```java
+List<Integer> numbers = IntStream.rangeClosed(1, 1_000_000)
+    .boxed()
+    .collect(Collectors.toList());
+
+// Gute Kandidaten für parallel:
+int sum = numbers.parallelStream()
+    .map(n -> n * n)        // teure Operation
+    .reduce(0, Integer::sum);
+```
+
+Und ein schlechtes Beispiel:
+
+```java
+List<Integer> numbers = Arrays.asList(1, 2, 3, 4);
+
+// Schlechter Kandidat:
+int sum = numbers.parallelStream()
+    .reduce(0, Integer::sum); // Overhead > Nutzen
+```
+## Fork/Join
+Die Grundidee des Fork/Join‑Frameworks ist **Divide‑and‑Conquer + rekursives Zerlegen + Work‑Stealing**, 
+damit alle CPU‑Kerne möglichst gleichmäßig ausgelastet bleiben. Das Framework teilt große Aufgaben rekursiv in kleine Teilaufgaben, führt sie parallel aus und nutzt Work‑Stealing, um Leerlauf zu vermeiden.  
+
+## Grundidee des Fork/Join‑Frameworks
+Das Fork/Join‑Framework ist ein **spezieller ExecutorService**, 
+der für Aufgaben entwickelt wurde, die sich **rekursiv in kleinere Teilprobleme zerlegen** lassen. 
+Ziel ist es, **alle verfügbaren CPU‑Kerne** effizient zu nutzen.
+
+Die zentrale Klasse ist **ForkJoinPool**, der eine Menge Worker‑Threads verwaltet und das Work‑Stealing‑Verfahren implementiert.
+
+
+#### Rekursives Zerlegen von Aufgaben (Divide & Conquer)
+Das typische Muster lautet:
+
+> *Wenn die Aufgabe klein genug ist → direkt ausführen.*  
+> *Sonst → in zwei oder mehr Teilaufgaben zerlegen, parallel ausführen, Ergebnisse zusammenführen.*
+
+In Java geschieht das über zwei abstrakte Klassen:
+
+- **RecursiveTask<V>** → liefert ein Ergebnis
+- **RecursiveAction** → führt nur eine Aktion aus
+
+Beispielhafte Struktur:
+
+```java
+if (isSmallEnough()) {
+    computeDirectly();
+} else {
+    ForkJoinTask<?> left = new SubTask(...).fork();
+    ForkJoinTask<?> right = new SubTask(...).fork();
+    left.join();
+    right.join();
+}
+```
+
+Dieses Muster eignet sich besonders für:
+
+- Array‑Verarbeitung
+- Bildbearbeitung
+- mathematische Berechnungen
+- Dateisystem‑Traversal  
+
+
+## Work‑Stealing‑Pool (Effiziente Lastverteilung)
+Der **Work‑Stealing‑Algorithmus** ist das Herzstück des Frameworks.
+
+### So funktioniert Work‑Stealing:
+- Jeder Worker‑Thread besitzt **eine eigene doppelt‑endige Warteschlange (Deque)**.
+- Ein Thread arbeitet seine eigenen Aufgaben **von vorne** ab.
+- Wenn ein Thread **nichts mehr zu tun hat**, wird er nicht idle, sondern **stiehlt Aufgaben** aus der **Rückseite** der Deque eines anderen Threads.  
+
+### Vorteile:
+- **Hohe CPU‑Auslastung**: kaum Leerlauf
+- **Automatisches Load‑Balancing**
+- **Vermeidung von Deadlocks**, da Threads beim Warten weiterarbeiten können  
+  
+#### Warum „Stealing“ von hinten?
+- Minimiert Synchronisation
+- Minimiert Konflikte zwischen Besitzer‑Thread (arbeitet vorne) und stehlendem Thread (nimmt hinten)
+
+#### Warum Fork/Join schneller ist als ein normaler Thread‑Pool
+Ein klassischer ExecutorService verteilt Aufgaben statisch. Wenn ein Thread blockiert oder fertig ist, kann es zu **Ungleichverteilung** kommen.
+
+ForkJoinPool dagegen:
+
+- erlaubt **dynamische** Verteilung
+- nutzt **rekursive Zerlegung**
+- verhindert **Thread‑Starvation** durch Stealing
