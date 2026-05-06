@@ -1403,3 +1403,54 @@ ForkJoinPool dagegen:
 - nutzt **rekursive Zerlegung**
 - verhindert **Thread‑Starvation** durch Stealing
 
+## C
+### Aufgabe 8
+
+
+1. Ohne synchronized könnten Producer und Consumer gleichzeitig auf list zugreifen.
+
+Beispiel:
+
+    Producer prüft list.size() < capacity
+    Bevor er add() ausführt, entfernt der Consumer ein Element oder ein anderer Producer fügt eines hinzu.
+
+Folgen:
+
+    inkonsistenter Zustand
+    doppelte Verarbeitung
+    verlorene Daten
+    Exceptions wie NoSuchElementException
+
+2. Ohne Kapazitätsprüfung:
+
+    Producer fügt Elemente hinzu, bis list unendlich wächst → OutOfMemoryError
+    Consumer versucht zu entfernen, wenn list leer ist → NoSuchElementException
+
+3. Ohne wait()
+
+Folgen:
+
+    CPU läuft auf 100%
+    ineffiziente Ressourcennutzung
+
+4. Falscher Einsatz von wait()/notify() kann beide Threads blockieren ***DEADLOCK***
+
+Beispiel:
+
+    Producer wartet auf freien Platz
+    Consumer wartet auf Daten
+    keiner wird aufgeweckt
+
+Folge:
+
+    Programm hängt dauerhaft
+    
+5. Wenn notify() vergessen wird wartender Thread bleibt ewig blockiert
+6. Ohne atomare Operationen könnte z. B. size() und add() nicht zusammenhängend ausgeführt werden.
+
+### Aufgabe 9
+
+Hier ist beispiel für Hash Finder mit sha256 verfahren von eingegenen Text. Abhängin von dificalty '0000' wie viele NULLs wir angben wollen. Je mehr NULLs desto schwieriger ist es den Hash zu finden.
+Dem Text wird nonce dazu gefügt und dann in bits umgewandelt. Dann wird der Hash berechnet und überprüft, ob er die gewünschte Anzahl von NULLs am Anfang hat. Wenn nicht, wird die nonce erhöht und der Prozess wiederholt, bis ein gültiger Hash gefunden wird.
+Desto text länger ist desto mehr Möglichkeiten gibt es für die nonce, was die Suche nach einem gültigen Hash erschwert.
+
