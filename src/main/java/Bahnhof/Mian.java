@@ -1,5 +1,7 @@
 package Bahnhof;
 
+import Rainbow.MiniRainbowTable;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -9,9 +11,11 @@ public class Mian {
     {
         getTrains();
         Bahnhof bahnhof = new Bahnhof();
+        MitExecut mit =  new MitExecut();
         for(Train train : trains)
         {
-            bahnhof.ankunft(train);
+            //bahnhof.ankunft(train);
+            mit.tuTU(train);
         }
     }
     private static List<Train>  getTrains()
