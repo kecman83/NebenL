@@ -29,7 +29,7 @@ public class MiniRainbowTable {
         }
         for (Character c : alphabet) {
             final String nextPass = curPass + c;
-            if (rest == maxLength) {
+            if (rest >= maxLength-5) {
                 pool.submit(() -> generateRainbowTablePool(nextPass, rest - 1, maxLength, pool, latch));
             } else {
                 generateRainbowTablePool(nextPass, rest - 1, maxLength, pool, latch);
@@ -77,7 +77,7 @@ public class MiniRainbowTable {
         return rainbowTable.get(hash);
     }
     public static void main(String[] args) throws InterruptedException {
-        int laenge = 8;
+        int laenge = 10;
 
         System.out.println("Generiere Rainbow Table...");
         long start = System.currentTimeMillis();
